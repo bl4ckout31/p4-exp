@@ -2,7 +2,7 @@
 import sys
 import struct
 
-from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr
+from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr, bind_layers
 from scapy.all import Packet, IPOption
 from scapy.all import PacketListField, ShortField, IntField, LongField, BitField, FieldListField, FieldLenField
 from scapy.all import IP, UDP, Raw
@@ -21,19 +21,15 @@ def get_if():
     return iface
 
 class SwitchTrace(Packet):
+    name = "SwitchTrace"
     fields_desc = [ IntField("swid", 0),
                   IntField("qdepth", 0)]
     def extract_padding(self, p):
                 return "", p
 
-class IPOption_MRI(IPOption):
+class MRI(Packet):
     name = "MRI"
-    option = 31
-    fields_desc = [ _IPOption_HDR,
-                    FieldLenField("length", None, fmt="B",
-                                  length_of="swtraces",
-                                  adjust=lambda pkt,l:l*2+4),
-                    ShortField("count", 0),
+    fields_desc = [ ShortField("count", 0),
                     PacketListField("swtraces",
                                    [],
                                    SwitchTrace,
@@ -47,10 +43,12 @@ def handle_pkt(pkt):
 
 
 def main():
+    bind_layers(UDP, MRI, dport=5000)
+    bind_layers(UDP, MRI, sport=5000)
     iface = 'h2-eth0'
     print "sniffing on %s" % iface
     sys.stdout.flush()
-    sniff(filter="udp and port 4321", iface = iface,
+    sniff(filter="udp and port 5000", iface = iface,
           prn = lambda x: handle_pkt(x))
 
 if __name__ == '__main__':

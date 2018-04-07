@@ -6,7 +6,7 @@ import socket
 import random
 import struct
 
-from scapy.all import sendp, send, hexdump, get_if_list, get_if_hwaddr
+from scapy.all import sendp, send, hexdump, get_if_list, get_if_hwaddr, bind_layers
 from scapy.all import Packet, IPOption
 from scapy.all import Ether, IP, UDP
 from scapy.all import IntField, FieldListField, FieldLenField, ShortField, PacketListField
@@ -32,14 +32,9 @@ class SwitchTrace(Packet):
     def extract_padding(self, p):
                 return "", p
 
-class IPOption_MRI(IPOption):
+class MRI(Packet):
     name = "MRI"
-    option = 31
-    fields_desc = [ _IPOption_HDR,
-                    FieldLenField("length", None, fmt="B",
-                                  length_of="swtraces",
-                                  adjust=lambda pkt,l:l*2+4),
-                    ShortField("count", 0),
+    fields_desc = [ ShortField("count", 0),
                     PacketListField("swtraces",
                                    [],
                                    SwitchTrace,
@@ -47,18 +42,17 @@ class IPOption_MRI(IPOption):
 
 
 def main():
-
     if len(sys.argv)<3:
         print 'pass 2 arguments: <destination> "<message>"'
         exit(1)
 
+    bind_layers(UDP, MRI, dport=5000)
+    bind_layers(UDP, MRI, sport=5000)
     addr = socket.gethostbyname(sys.argv[1])
     iface = get_if()
 
     pkt = Ether(src=get_if_hwaddr(iface), dst="ff:ff:ff:ff:ff:ff") / IP(
-        dst=addr, options = IPOption_MRI(count=0,
-            swtraces=[])) / UDP(
-            dport=4321, sport=1234) / sys.argv[2]
+        dst=addr) / UDP(dport=5000, sport=1234) / MRI(count=0, swtraces=[])
 
  #   pkt = Ether(src=get_if_hwaddr(iface), dst="ff:ff:ff:ff:ff:ff") / IP(
  #       dst=addr, options = IPOption_MRI(count=2,

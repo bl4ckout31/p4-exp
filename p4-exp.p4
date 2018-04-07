@@ -4,7 +4,7 @@
 
 const bit<8>  UDP_PROTOCOL = 0x11;
 const bit<16> TYPE_IPV4 = 0x800;
-const bit<5>  IPV4_OPTION_MRI = 31;
+const bit<16> MRI_PORT = 5000;
 
 #define MAX_HOPS 9
 
@@ -39,11 +39,11 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
-header ipv4_option_t {
-    bit<1> copyFlag;
-    bit<2> optClass;
-    bit<5> option;
-    bit<8> optionLength;
+header udp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> totalLen;
+    bit<16> checksum;
 }
 
 header mri_t {
@@ -71,7 +71,7 @@ struct metadata {
 struct headers {
     ethernet_t         ethernet;
     ipv4_t             ipv4;
-    ipv4_option_t      ipv4_option;
+    udp_t              udp;
     mri_t              mri;
     switch_t[MAX_HOPS] swtraces;
 }
@@ -94,25 +94,24 @@ parser MyParser(packet_in packet,
     state parse_ethernet {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
-            TYPE_IPV4: parse_ipv4;
-            default: accept;
+            TYPE_IPV4 : parse_ipv4;
+            default   : accept;
         }
     }
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        verify(hdr.ipv4.ihl >= 5, error.IPHeaderTooShort);
-        transition select(hdr.ipv4.ihl) {
-            5             : accept;
-            default       : parse_ipv4_option;
+        transition select(hdr.ipv4.protocol) {
+            17            : parse_udp;
+            default       : accept;
         }
     }
 
-    state parse_ipv4_option {
-        packet.extract(hdr.ipv4_option);
-        transition select(hdr.ipv4_option.option) {
-            IPV4_OPTION_MRI: parse_mri;
-            default: accept;
+    state parse_udp {
+        packet.extract(hdr.udp);
+        transition select(hdr.udp.dstPort) {
+            MRI_PORT      : parse_mri;
+            default       : accept;
         }
     }
 
@@ -120,8 +119,8 @@ parser MyParser(packet_in packet,
         packet.extract(hdr.mri);
         meta.parser_metadata.remaining = hdr.mri.count;
         transition select(meta.parser_metadata.remaining) {
-            0 : accept;
-            default: parse_swtrace;
+            0       : accept;
+            default : parse_swtrace;
         }
     }
 
@@ -129,8 +128,8 @@ parser MyParser(packet_in packet,
         packet.extract(hdr.swtraces.next);
         meta.parser_metadata.remaining = meta.parser_metadata.remaining  - 1;
         transition select(meta.parser_metadata.remaining) {
-            0 : accept;
-            default: parse_swtrace;
+            0       : accept;
+            default : parse_swtrace;
         }
     }    
 }
@@ -196,15 +195,14 @@ control MyEgress(inout headers hdr,
         hdr.swtraces[0].swid = swid;
         hdr.swtraces[0].qdepth = (qdepth_t)standard_metadata.deq_qdepth;
 
-        hdr.ipv4.ihl = hdr.ipv4.ihl + 2;
-        hdr.ipv4_option.optionLength = hdr.ipv4_option.optionLength + 8; 
-	hdr.ipv4.totalLen = hdr.ipv4.totalLen + 8;
+	    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 8;
+        hdr.udp.totalLen = hdr.udp.totalLen + 8;
     }
 
     table swtrace {
         actions = { 
-	    add_swtrace; 
-	    NoAction; 
+	        add_swtrace; 
+	        NoAction; 
         }
         default_action = NoAction();      
     }
@@ -248,9 +246,9 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-        packet.emit(hdr.ipv4_option);
+        packet.emit(hdr.udp);     
         packet.emit(hdr.mri);
-        packet.emit(hdr.swtraces);                 
+        packet.emit(hdr.swtraces);      
     }
 }
 

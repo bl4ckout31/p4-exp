@@ -9,7 +9,7 @@ import struct
 from scapy.all import sendp, send, hexdump, get_if_list, get_if_hwaddr, bind_layers
 from scapy.all import Packet, IPOption
 from scapy.all import Ether, IP, UDP
-from scapy.all import IntField, FieldListField, FieldLenField, ShortField, PacketListField
+from scapy.all import IntField, FieldListField, FieldLenField, BitField, ShortField, PacketListField
 from scapy.layers.inet import _IPOption_HDR
 
 from time import sleep
@@ -27,8 +27,12 @@ def get_if():
     return iface
 
 class SwitchTrace(Packet):
+    name = "SwitchTrace"
     fields_desc = [ IntField("swid", 0),
-                  IntField("qdepth", 0)]
+                  IntField("qdepth", 0),
+                  IntField("enq_timestamp", 0),
+                  IntField("deq_timedelta", 0),
+                  BitField("ingress_global_timestamp", 0, 48)]
     def extract_padding(self, p):
                 return "", p
 

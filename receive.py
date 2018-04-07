@@ -23,7 +23,10 @@ def get_if():
 class SwitchTrace(Packet):
     name = "SwitchTrace"
     fields_desc = [ IntField("swid", 0),
-                  IntField("qdepth", 0)]
+                  IntField("qdepth", 0),
+                  IntField("enq_timestamp", 0),
+                  IntField("deq_timedelta", 0),
+                  BitField("ingress_global_timestamp", 0, 48)]
     def extract_padding(self, p):
                 return "", p
 

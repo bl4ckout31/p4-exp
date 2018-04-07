@@ -53,6 +53,9 @@ header mri_t {
 header switch_t {
     switchID_t  swid;
     qdepth_t    qdepth;
+    bit<32>     enq_timestamp;
+    bit<32>     deq_timedelta;
+    bit<48>     ingress_global_timestamp;
 }
 
 struct ingress_metadata_t {
@@ -194,9 +197,12 @@ control MyEgress(inout headers hdr,
         hdr.swtraces.push_front(1);
         hdr.swtraces[0].swid = swid;
         hdr.swtraces[0].qdepth = (qdepth_t)standard_metadata.deq_qdepth;
+        hdr.swtraces[0].enq_timestamp = standard_metadata.enq_timestamp;
+        hdr.swtraces[0].deq_timedelta = standard_metadata.deq_timedelta;
+        hdr.swtraces[0].ingress_global_timestamp = standard_metadata.ingress_global_timestamp;
 
-	    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 8;
-        hdr.udp.totalLen = hdr.udp.totalLen + 8;
+	    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 24;
+        hdr.udp.totalLen = hdr.udp.totalLen + 24;
     }
 
     table swtrace {

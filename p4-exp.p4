@@ -60,6 +60,7 @@ header switch_t {
 
 struct ingress_metadata_t {
     bit<16>  count;
+    bit<1>   clone;
 }
 
 struct parser_metadata_t {
@@ -165,6 +166,10 @@ control MyIngress(inout headers hdr,
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
+    action controller_forward(macAddr_t dstAddr, egressSpec_t port) {
+        ipv4_forward(dstAddr, port);
+    }
+
     table ipv4_lpm {
         key = {
             hdr.ipv4.dstAddr: lpm;
@@ -175,6 +180,14 @@ control MyIngress(inout headers hdr,
             NoAction;
         }
         size = 1024;
+        default_action = NoAction();
+    }
+
+    table controller {
+        actions = {
+            controller_forward;
+            NoAction; 
+        }
         default_action = NoAction();
     }
     
@@ -192,7 +205,7 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    action add_swtrace(switchID_t swid) { 
+    action add_swtrace(switchID_t swid, macAddr_t controllerAddr) { 
         hdr.mri.count = hdr.mri.count + 1;
         hdr.swtraces.push_front(1);
         hdr.swtraces[0].swid = swid;
@@ -203,6 +216,11 @@ control MyEgress(inout headers hdr,
 
 	    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 24;
         hdr.udp.totalLen = hdr.udp.totalLen + 24;
+
+        if(hdr.ethernet.dstAddr != dstAddr) {
+            meta.clone = 1;
+            clone_egress_pkt_to_ingress();
+        }
     }
 
     table swtrace {
